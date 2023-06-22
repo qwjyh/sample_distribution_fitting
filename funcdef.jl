@@ -8,7 +8,7 @@ using Base.Iterators
 TBW
 """
 function target(x, p)
-    model = MixtureModel(Union{Normal, Landau}[Normal(x[1], x[2]), Landau(x[3], x[4])], [x[5], 1 - x[5]])
+    model = MixtureModel(Union{Normal, Landau}[Normal(x[1], x[2]), Landau(x[3], x[4])], [x[5], x[6]])
     sum = 0.0
     for p in p
         sum += logpdf(model, p)
@@ -83,8 +83,8 @@ end
 - `x`: Variables to optimize. In this case, distribution parameters.
 - `p`: Parameters for the problem. In this case, data.
 """
-function (dp::DistributionPrototype)(x, p)
-    length(filter(isinitparam, vcat(dp.givenparams, dp.givenpriors))) == length(x) || error("Argument length mismatched")
+function (dp::DistributionPrototype)()
+    # length(filter(isinitparam, vcat(dp.givenparams, dp.givenpriors))) == length(x) || error("Argument length mismatched")
     # model def
     model_def_expr = Any[]
     # component
@@ -121,18 +121,24 @@ function (dp::DistributionPrototype)(x, p)
     end
 
     # combine
-    push!(model_def_expr, Expr(
+    model_def_expr = Expr(
         :call,
         :MixtureModel,
         model_component_expr,
         :([$(prior_expr...)])
-    ))
-    # eval(quote
-    #     (x, p) -> begin
-    #         model = $(model_dist_type)[]
-    #     end
-    # end)
-    return model_def_expr
+    )
+
+    eval(quote
+        (x, p) -> begin
+            model = $(model_def_expr)
+            sum = 0.0
+            for p in p
+                sum += - logpdf(model, p)
+            end
+            return sum
+        end
+    end)
+    # return model_def_expr
 end
 
 function mixmodel_result(distributions::Vector{T})::Distributions.MixtureModel where {T<:Distribution}
